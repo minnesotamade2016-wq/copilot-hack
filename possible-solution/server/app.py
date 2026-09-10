@@ -1,5 +1,6 @@
 # Create a base Flask server
 
+import csv
 import pickle
 from flask import Flask, request, jsonify
 
@@ -16,8 +17,17 @@ def after_request(response):
     return response
 
 
-# Load model from pickle file
+# Load model and airport data once when the process starts. Keeping the
+# relatively static airport catalog out of the request path avoids disk I/O
+# and CSV parsing for every /airports request.
 model = pickle.load(open('model.pkl', 'rb'))
+
+with open('airports.csv', newline='', encoding='utf-8') as airport_file:
+    AIRPORTS = [
+        {'id': int(row['OriginAirportID']), 'name': row['OriginAirportName']}
+        for row in csv.DictReader(airport_file)
+    ]
+AIRPORTS = sorted(AIRPORTS, key=lambda airport: airport['name'])
 
 # Model takes two parameters - day of week and airport id, then returns a prediction of flight delay
 @app.route('/predict', methods=['GET'])
@@ -45,21 +55,7 @@ def predict():
 # Create a new route called airports with method of get
 @app.route('/airports', methods=['GET'])
 def airports():
-    # Load airports from csv file
-    airports = open('airports.csv', 'r').readlines()
-
-    # Remove first line of airports
-    airports.pop(0)
-
-    # Create list with dictionary of airports
-    # First value is id, second is name
-    # Convert id to integer
-    # Remove last character from name
-    airports = [{'id': int(airport.split(',')[0]), 'name': airport.split(',')[1][:-1]} for airport in airports]
-    # Sort by name
-    airports = sorted(airports, key=lambda k: k['name'])
-
-    return jsonify(airports)
+    return jsonify(AIRPORTS)
 
 if __name__ == '__main__':
     app.run(debug=True)
